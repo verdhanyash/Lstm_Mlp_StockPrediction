@@ -27,16 +27,15 @@ For example, a close of 100 followed by 101 produces label 1; a close of 100 fol
 Each model produces a sigmoid score interpreted as an estimated probability of UP. Scores **at least 0.50** are classified as UP. The scores are not expected returns, and their probability calibration has not been established.
 
 ```mermaid
-flowchart LR
-    A[Yahoo Finance daily OHLCV] --> B[Clean dates and invalid bars]
-    B --> C[Calculate 10 historical features]
-    C --> D[Build 20-session windows]
-    D --> E[Split by next-session outcome date]
-    E --> F[Fit scaler on training-period rows]
-    F --> G[Train MLP and LSTM]
-    G --> H[Select weights using validation loss]
-    H --> I[Evaluate on held-out test data]
-    I --> J[Compare with majority baseline]
+flowchart TD
+    A["1. Collect market data<br/>Yahoo Finance · daily OHLCV"]
+    B["2. Clean and prepare<br/>Check dates and invalid bars<br/>Calculate 10 historical features"]
+    C["3. Build input windows<br/>20 sessions × 10 features"]
+    D["4. Split and standardise<br/>Use chronological outcome dates<br/>Fit scaler on training rows only"]
+    E["5. Train both models<br/>MLP and LSTM<br/>Select weights by validation loss"]
+    F["6. Evaluate predictions<br/>Use the held-out test set<br/>Compare with the majority baseline"]
+    A --> B --> C --> D --> E --> F
+    classDef default font-size:18px,stroke-width:2px;
 ```
 
 ## Dataset and source
@@ -102,16 +101,14 @@ Standardisation uses `(value - training mean) / training standard deviation`; it
 The split uses unique **next-session outcome dates**, with common boundaries for all assets. Training targets therefore do not extend into validation dates. Later windows may legitimately use earlier historical context.
 
 ```mermaid
-flowchart LR
-    A[Examples sorted by outcome date] --> B[Training: earliest 70 percent]
-    B --> C[Validation: next 15 percent]
-    C --> D[Test: final 15 percent]
-    B --> E[Fit feature scaler and learn weights]
-    E --> F[Reuse scaler for later inputs]
-    C --> G[Monitor validation loss and restore best weights]
-    G --> H[Final held-out evaluation]
-    D --> H
-    F --> H
+flowchart TD
+    A["Sort examples by date<br/>Use the next-session outcome date"]
+    B["TRAINING · earliest 70%<br/>Fit the scaler on training rows<br/>Learn model weights"]
+    C["VALIDATION · next 15%<br/>Reuse the training scaler<br/>Select weights using validation loss"]
+    D["TESTING · final 15%<br/>Reuse the same scaler<br/>Evaluate the selected models"]
+    E["Compare final test results<br/>MLP vs LSTM vs majority baseline"]
+    A --> B --> C --> D --> E
+    classDef default font-size:18px,stroke-width:2px;
 ```
 
 | Split | Examples | Outcome-date boundary |
@@ -130,19 +127,20 @@ LSTM processes 20 ordered steps, each with 10 features, updating an internal sta
 
 ```mermaid
 flowchart TD
-    A[Shared input: 20 sessions by 10 features] --> M0[MLP: flatten to 200 values]
-    A --> L0[LSTM: 64 units]
-    M0 --> M1[Dense 128 with ReLU]
-    M1 --> M2[Batch normalisation]
-    M2 --> M3[Dropout 30 percent]
-    M3 --> M4[Dense 64 with ReLU]
-    M4 --> M5[Dense 1 with sigmoid]
-    L0 --> L1[Final hidden state]
-    L1 --> L2[Dropout 30 percent]
-    L2 --> L3[Dense 32 with ReLU]
-    L3 --> L4[Dense 1 with sigmoid]
-    M5 --> O[Estimated UP score; threshold 0.50]
+    A["Shared input window<br/>20 sessions × 10 features"]
+    A --> M0["MLP input<br/>Flatten to 200 values"]
+    A --> L0["LSTM input<br/>Read 20 ordered steps"]
+    M0 --> M1["Dense layer<br/>128 units · ReLU"]
+    M1 --> M2["Batch normalisation<br/>Dropout · 30%"]
+    M2 --> M3["Dense layer<br/>64 units · ReLU"]
+    M3 --> M4["Output layer<br/>1 unit · sigmoid"]
+    L0 --> L1["LSTM layer<br/>64 units · final hidden state"]
+    L1 --> L2["Dropout<br/>30%"]
+    L2 --> L3["Dense layer<br/>32 units · ReLU"]
+    L3 --> L4["Output layer<br/>1 unit · sigmoid"]
+    M4 --> O["Estimated probability of UP<br/>Score ≥ 0.50 → UP<br/>Score < 0.50 → DOWN / unchanged"]
     L4 --> O
+    classDef default font-size:18px,stroke-width:2px;
 ```
 
 | Model | Total parameters | Processing |
